@@ -7,6 +7,16 @@ test('End-to-End WebSocket Pipeline Simulation', async () => {
   // Start server on an ephemeral port for testing
   const address = await server.listen({ port: 0, host: '127.0.0.1' });
   const port = (server.server.address() as any).port;
+
+  // 0. Verify /health diagnostic endpoint returns 200 OK and provider status
+  const healthRes = await fetch(`http://127.0.0.1:${port}/health`);
+  assert.equal(healthRes.status, 200);
+  const healthJson = (await healthRes.json()) as any;
+  assert.equal(healthJson.status, 'ok');
+  assert.ok(healthJson.providers);
+  assert.equal(typeof healthJson.providers.stt, 'string');
+  assert.equal(typeof healthJson.providers.lipSync, 'string');
+
   const wsUrl = `ws://127.0.0.1:${port}/ws`;
 
   const ws = new WebSocket(wsUrl);

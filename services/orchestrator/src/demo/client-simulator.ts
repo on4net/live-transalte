@@ -122,6 +122,7 @@ function startStreamingAudio() {
 
 ws.on('error', (err) => {
   console.error('❌ WebSocket error:', err.message);
+  console.log('💡 Hint: Make sure the Orchestrator server is running first (run "npm start" or execute "scripts/start_server.bat").');
 });
 
 ws.on('close', () => {

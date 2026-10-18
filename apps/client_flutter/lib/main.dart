@@ -6,6 +6,7 @@ import 'features/diagnostics/latency_monitor_widget.dart';
 import 'features/translation/subtitle_overlay.dart';
 
 import 'features/player/audio_playback_service.dart';
+import 'native/window_capture_bindings.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -30,13 +31,27 @@ class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
 
   @override
-  State<DashboardScreen> createState() => _DashboardScreenState();
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: const _DashboardBody(),
+    );
+  }
 }
 
-class _DashboardScreenState extends State<DashboardScreen> {
+class _DashboardBody extends StatefulWidget {
+  const _DashboardBody();
+
+  @override
+  State<_DashboardBody> createState() => _DashboardBodyState();
+}
+
+class _DashboardBodyState extends State<_DashboardBody> {
   late final SessionController _sessionController;
   late final AudioCaptureService _audioService;
   late final AudioPlaybackService _playbackService;
+  late final WindowCaptureBindings _windowCapture;
+
+  CapturableWindow? _selectedWindow;
 
   @override
   void initState() {
@@ -44,6 +59,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
     _sessionController = SessionController();
     _audioService = AudioCaptureService();
     _playbackService = AudioPlaybackService();
+    _windowCapture = WindowCaptureBindings();
+    _windowCapture.initialize();
 
     // Wire synthesized audio chunks into playback jitter buffer
     _sessionController.onSynthesizedAudioReceived = (pcmBytes, durationMs, pts) {
@@ -53,9 +70,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
     _sessionController.addListener(() {
       if (_sessionController.status == SessionStatus.connected && !_audioService.isStreaming) {
         _audioService.startCapture(_sessionController);
+        if (_selectedWindow != null) {
+          _windowCapture.startCapture(_selectedWindow!.hwnd);
+        }
       } else if (_sessionController.status == SessionStatus.idle && _audioService.isStreaming) {
         _audioService.stopCapture();
         _playbackService.stop();
+        _windowCapture.stopCapture();
       }
       setState(() {});
     });
@@ -63,10 +84,117 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   @override
   void dispose() {
+    _windowCapture.dispose();
     _playbackService.dispose();
     _audioService.dispose();
     _sessionController.dispose();
     super.dispose();
+  }
+
+  void _showWindowSelectionDialog() {
+    final windows = _windowCapture.getOpenWindows();
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppTheme.surfaceDark,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: AppTheme.cardBorder),
+        ),
+        title: const Row(
+          children: [
+            Icon(Icons.video_camera_front_outlined, color: AppTheme.primaryNeon, size: 22),
+            SizedBox(width: 10),
+            Text(
+              'انتخاب پنجره تصویر برای لیپ‌سینک',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
+        content: SizedBox(
+          width: 480,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text(
+                'پنجره‌ای که ویدیوی گوینده در آن در حال پخش است را انتخاب کنید (مرورگر یوتیوب، زوم، پلیر):',
+                style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+              ),
+              const SizedBox(height: 16),
+              Flexible(
+                child: ListView.separated(
+                  shrinkWrap: true,
+                  itemCount: windows.length + 1,
+                  separatorBuilder: (_, __) => const SizedBox(height: 8),
+                  itemBuilder: (context, index) {
+                    if (index == 0) {
+                      final isSelected = _selectedWindow == null;
+                      return ListTile(
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          side: BorderSide(
+                            color: isSelected ? AppTheme.primaryNeon : AppTheme.cardBorder,
+                          ),
+                        ),
+                        tileColor: isSelected ? AppTheme.primaryNeon.withOpacity(0.12) : AppTheme.surfaceLight.withOpacity(0.3),
+                        leading: const Icon(Icons.fullscreen, color: AppTheme.primaryNeon),
+                        title: const Text('تمام دسکتاپ / پیش‌فرض سیستم', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                        trailing: isSelected ? const Icon(Icons.check_circle, color: AppTheme.primaryNeon, size: 18) : null,
+                        onTap: () {
+                          setState(() {
+                            _selectedWindow = null;
+                          });
+                          _windowCapture.stopCapture();
+                          Navigator.of(ctx).pop();
+                        },
+                      );
+                    }
+
+                    final win = windows[index - 1];
+                    final isSelected = _selectedWindow?.hwnd == win.hwnd;
+
+                    return ListTile(
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        side: BorderSide(
+                          color: isSelected ? AppTheme.primaryNeon : AppTheme.cardBorder,
+                        ),
+                      ),
+                      tileColor: isSelected ? AppTheme.primaryNeon.withOpacity(0.12) : AppTheme.surfaceLight.withOpacity(0.3),
+                      leading: const Icon(Icons.web_asset, color: AppTheme.secondaryNeon),
+                      title: Text(
+                        win.title,
+                        style: const TextStyle(fontSize: 13),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      trailing: isSelected ? const Icon(Icons.check_circle, color: AppTheme.primaryNeon, size: 18) : null,
+                      onTap: () {
+                        setState(() {
+                          _selectedWindow = win;
+                        });
+                        if (_sessionController.status == SessionStatus.connected) {
+                          _windowCapture.startCapture(win.hwnd);
+                        }
+                        Navigator.of(ctx).pop();
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('انصراف', style: TextStyle(color: AppTheme.textMuted)),
+          ),
+        ],
+      ),
+    );
   }
 
   void _handleToggleSession() {
@@ -322,6 +450,59 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                       ),
                                     ),
                                   ],
+                                ),
+
+                                const SizedBox(height: 20),
+
+                                // Target Video Window Selector
+                                const Text(
+                                  'پنجره ویدیویی هدف (Window Video Capture)',
+                                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                                ),
+                                const SizedBox(height: 8),
+                                InkWell(
+                                  onTap: _showWindowSelectionDialog,
+                                  borderRadius: BorderRadius.circular(10),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                                    decoration: BoxDecoration(
+                                      color: _selectedWindow != null
+                                          ? AppTheme.secondaryNeon.withOpacity(0.12)
+                                          : AppTheme.surfaceLight.withOpacity(0.4),
+                                      borderRadius: BorderRadius.circular(10),
+                                      border: Border.all(
+                                        color: _selectedWindow != null
+                                            ? AppTheme.secondaryNeon
+                                            : AppTheme.cardBorder,
+                                      ),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Icon(
+                                          _selectedWindow != null ? Icons.web_asset : Icons.desktop_windows,
+                                          size: 18,
+                                          color: _selectedWindow != null ? AppTheme.secondaryNeon : AppTheme.textMuted,
+                                        ),
+                                        const SizedBox(width: 10),
+                                        Expanded(
+                                          child: Text(
+                                            _selectedWindow != null
+                                                ? _selectedWindow!.title
+                                                : 'پیش‌فرض: تمام دسکتاپ (کلیک برای انتخاب پنجره)',
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              fontWeight: _selectedWindow != null ? FontWeight.bold : FontWeight.normal,
+                                              color: _selectedWindow != null ? Colors.white : AppTheme.textMuted,
+                                            ),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        const Icon(Icons.arrow_drop_down, color: AppTheme.textMuted),
+                                      ],
+                                    ),
+                                  ),
                                 ),
                               ],
                             ),
