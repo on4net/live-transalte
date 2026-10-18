@@ -50,12 +50,16 @@
 * صوت به سرویس STT استریم می‌شود.
 * خروجی شامل متن شناسایی‌شده همراه با **تایم‌استمپ شروع و پایان (`start_pts`, `end_pts`)** است.
 
-### ۲.۴. مرحله ۴: ترجمه متنی با کنترل طول (Length-Constrained Translation)
-* پرامپت ارائه‌دهنده ترجمه طوری بهینه‌سازی می‌شود که علاوه بر انتقال دقیق مفهوم، آهنگ و تعداد هجاهای ترجمه به زبان فارسی متناسب با طول زمانی کلام اصلی باشد:
+### ۲.۴. مرحله ۴: ترجمه متنی با کنترل طول (Gemini API Translation Adapter)
+* **آداپتور Gemini (`GeminiTranslationAdapter`):**
+  * اتصال به مدل **Gemini 2.0 Flash** از طریق Google Gen AI SDK یا WebSockets جهت ترجمه استریمی بلادرنگ.
+  * پشتیبانی از تاخیر بسیار پایین (زیر ۳۰۰ تا ۵۰۰ میلی‌ثانیه) با استریم توکن‌ها (Server-Sent Events / Stream).
+  * پرامپت ارائه‌دهنده ترجمه طوری بهینه‌سازی می‌شود که علاوه بر انتقال دقیق مفهوم، آهنگ و تعداد هجاهای ترجمه به زبان فارسی متناسب با طول زمانی کلام اصلی باشد:
   ```text
   System: You are a real-time simultaneous dubbing translator. Translate the speech into fluent Persian. 
   Keep the length and tempo closely matching the source utterance duration.
   ```
+  * استفاده از قابلیت **Context Caching** جمینای برای حفظ بافتار مکالمه در نشست‌های طولانی بدون افزایش هزینه توکن.
 
 ### ۲.۵. مرحله ۵: سنتز صدا و شبیه‌سازی گوینده (Voice Cloning TTS)
 * **استخراج پروفایل صوتی اولیه:** در اولین ۳ تا ۵ ثانیه صحبت گوینده، یک نمونه صوتی تمیز (Vocal Embedding) استخراج و با کلید نشست ذخیره می‌شود.
