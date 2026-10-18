@@ -25,10 +25,10 @@
             │
     ┌───────┴────────────────────────┐
     ▼                                ▼
-[AI Providers / Cloud APIs]     [GPU Lip-Sync Worker (Python/PyTorch)]
- - Streaming STT (Whisper/etc)   - Face Detection & Landmark Extraction
- - Contextual Translator (LLM)   - GAN/Diffusion-based Lip Synchronization
- - Zero-shot Voice Cloning TTS   - Poisson / Seamless Face Blending
+[AI Providers / Cloud APIs]     [External Lip-Sync Provider (Simli / Fal.ai)]
+ - Streaming STT (Whisper/etc)   - Sub-300ms Speech-to-Video WebRTC Stream
+ - Contextual Translator (LLM)   - PCM 16kHz audio chunk ingestion
+ - Zero-shot Voice Cloning TTS   - Direct Face & Lip-Sync Video Relay
 ```
 
 ---
@@ -71,22 +71,26 @@
 
 ---
 
-## ۳. پایپ‌لاین هماهنگ‌سازی لب (Lip-Sync Pipeline)
+## ۳. پایپ‌لاین هماهنگ‌سازی لب بلادرنگ (Real-Time Lip-Sync Pipeline)
+
+به جای میزبانی مدل‌های سنگین هوش مصنوعی روی سرور محلی (که نیازمند GPUهای پرهزینه و تاخیر بالا است)، سیستم از سرویس‌های تخصصی بلادرنگ ابری با تاخیر فوق‌العاده پایین (به‌ویژه **Simli**) استفاده می‌کند:
 
 ```
-[Incoming Video Frame] ──▶ [Face Detection & Crop] ──▶ [Bounding Box Normalized]
-                                                               │
-[Synthesized Persian Audio Chunk] ─────────────────────────────┼──▶ [PyTorch Lip-Sync Model]
-                                                               │            │
-                                                               │            ▼
-[Final Video Frame] ◀── [Poisson Blending onto Source Frame] ◀──┴── [Generated Mouth Region]
+[Synthesized Persian Audio (PCM 16k)] 
+                │
+                ▼
+[Orchestrator Backend] ──(WebRTC/WSS Chunk Stream)──▶ [Simli STV Engine (<300ms)]
+                                                                │
+                                                                │ (H.264/VP9 Video Track)
+                                                                ▼
+[Flutter Windows Client] ◀──────(WebRTC Media Stream)───────────┘
 ```
 
-1. **فریم‌گیری:** کلاینت یا سرور فریم‌های ویدیو را با نرخ ۲۵ یا ۳۰ فریم بر ثانیه دریافت می‌کند.
-2. **برش چهره (Face Alignment & Crop):** کادر صورت استخراج شده و به ابعاد استاندارد مدل (مثلاً ۲۵۶×۲۵۶ یا ۵۱۲×۵۱۲) تغییر اندازه می‌دهد.
-3. **تولید حرکت لب:** مدل هوش مصنوعی (مانند MuseTalk یا موتورهای هم‌ارز) فریم صورت و طیف‌نگار (Spectrogram) صدای فارسی را دریافت کرده و فریم متحرک دهان را تولید می‌کند.
-4. **ترکیب نرم (Seamless Blending):** ناحیه اصلاح‌شده به صورت ماسک نرم روی فریم اصلی ویدیوی ویندوز قرار می‌گیرد تا لرزش یا خط برش مشاهده نشود.
-5. **ارسال به کلاینت:** فریم‌ها با شناسه زمانی (`pts`) مشخص به کلاینت ارسال شده و در پلیر فلاتر با صدا میکس می‌شوند.
+### ۳.۱. مشخصات فنی آداپتور Simli (`SimliLipSyncAdapter`)
+1. **فرمت ورودی هماهنگ:** خروجی صوتی TTS دقیقاً در قالب `PCM 16-bit, 16000Hz Mono` به ابعاد ۶۰۰۰ بایتی مستقیماً به استریم ورودی Simli تزریق می‌شود.
+2. **تاخیر حداقل (<300ms):** موتور Speech-to-Video در سیملی فریم‌های ویدیویی هماهنگ را بلافاصله روی یک ترک WebRTC تولید می‌کند.
+3. **همگام‌سازی صوت و تصویر (A/V Sync):** از مکانیزم RTCP Sender Reports برای قفل زمانی صوت فارسی و تصویر لب‌ها استفاده می‌شود تا هیچ لغزش یا تاخیری پدیدار نگردد.
+4. **سرویس جایگزین برای حالت Video-to-Video:** در صورت نیاز به تغییر مستقیم فریم‌های ویدیوی اصلی (به جای آواتار چهره)، از مدل سرورلس **Fal.ai MuseTalk** به عنوان ارائه‌دهنده جایگزین استفاده می‌شود.
 
 ---
 
@@ -158,13 +162,13 @@
 ```
 
 ### ۴.۴. کنترل تاخیر و Fallback اتوماتیک
-اگر تاخیر صف کارت گرافیک از حد مجاز بگذرد:
+اگر تاخیر استریم تصویر یا پینگ سرویس خارجی از سقف مجاز (مثلاً ۱۰۰۰ میلی‌ثانیه) فراتر رود:
 ```json
 {
   "event": "system.warning",
   "data": {
     "code": "HIGH_LATENCY_LIPSYNC",
-    "message": "GPU worker queue latency exceeded 1500ms. Temporarily falling back to audio-only translation.",
+    "message": "External Lip-Sync API latency exceeded 1000ms. Temporarily falling back to audio-only translation.",
     "action": "LIPSYNC_PAUSED"
   }
 }
@@ -172,11 +176,11 @@
 
 ---
 
-## ۵. مقیاس‌پذیری افقی (Horizontal Scaling Strategy)
+## ۵. مقیاس‌پذیری افقی و کاهش بار زیرساخت (Cloud-Native Scaling)
 
-1. **مدیریت نشست‌های سرور (Stateful Routing):**
-   - نشست‌ها از طریق Redis Sticky Session یا روتینگ مبتنی بر `sessionId` در Nginx/Traefik به نود مشخص متصل می‌شوند.
-2. **صف پردازش وظایف سنگین (GPU Queue):**
-   - سرورهای Node.js بسته‌های فریم و صوت را درون صف‌های Redis Streams / BullMQ قرار داده و Workerهای پایتون بر اساس ظرفیت کارت گرافیک وظایف را مصرف می‌کنند.
+1. **حذف سربار GPU محلی:** با انتقال بار پردازش لیپ‌سینک به سرویس تخصصی Simli / Fal.ai، نیاز به سرورهای گران‌قیمت کارت گرافیک و صف‌های سنگین فریم از زیرساخت سرور اصلی حذف می‌شود.
+2. **مدیریت نشست‌های سرور (Stateful Routing):**
+   - نشست‌ها از طریق Redis Sticky Session یا روتینگ مبتنی بر `sessionId` در Nginx/Traefik به نود ارکستریتور مشخص متصل می‌شوند.
 3. **مکانیزم پشتیبان قطعی (Circuit Breaker):**
-   - در صورت از دسترس خارج شدن GPU Worker، سرور بدون قطع کردن صدا، کلاینت را به حالت صوتی تغییر وضعیت می‌دهد.
+   - در صورت بروز نوسان شبکه یا افت فریم در ارتباط با ارائه‌دهنده لیپ‌سینک، سرور بلافاصله و بدون قطع کردن استریم صدا، کلاینت را به حالت صوتی تغییر وضعیت می‌دهد (Audio-Only Fallback).
+

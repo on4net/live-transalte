@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  orchestrator:
+    build:
+      context: ./services/orchestrator
+      dockerfile: Dockerfile
+    container_name: live-translate-orchestrator
+    ports:
+      - "8080:8080"
+    environment:
+      - PORT=8080
+      - HOST=0.0.0.0
+      - LOG_LEVEL=info
+      - LIPSYNC_PROVIDER=${LIPSYNC_PROVIDER:-simli}
+      - TRANSLATION_PROVIDER=${TRANSLATION_PROVIDER:-gemini}
+      - STT_PROVIDER=${STT_PROVIDER:-deepgram}
+      - TTS_PROVIDER=${TTS_PROVIDER:-elevenlabs}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - DEEPGRAM_API_KEY=${DEEPGRAM_API_KEY:-}
+      - ELEVENLABS_API_KEY=${ELEVENLABS_API_KEY:-}
+      - SIMLI_API_KEY=${SIMLI_API_KEY:-}
+      - SIMLI_FACE_ID=${SIMLI_FACE_ID:-default_avatar}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 5s

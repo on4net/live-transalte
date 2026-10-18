@@ -4,7 +4,7 @@
 
 [![Platform](https://img.shields.io/badge/Platform-Windows%20Desktop%20(Flutter)-blue.svg)](docs/windows-platform.md)
 [![Backend](https://img.shields.io/badge/Backend-Node.js%20%2B%20TypeScript-green.svg)](docs/architecture.md)
-[![Worker](https://img.shields.io/badge/GPU%20Worker-Python%20%2B%20PyTorch-orange.svg)](docs/architecture.md)
+[![LipSync](https://img.shields.io/badge/Lip--Sync-Simli%20WebRTC%20(<300ms)-purple.svg)](docs/architecture.md)
 [![License](https://img.shields.io/badge/License-MIT-purple.svg)](LICENSE)
 
 ---
@@ -23,7 +23,7 @@
 - **⚡ تشخیص گفتار و برش هوشمند (VAD & Streaming STT):** تفکیک مکث‌ها با Silero VAD و استخراج دقیق متن و زمان‌مهر کلمات.
 - **🔄 ترجمه همگام و کنترل طول کلام (Length-Constrained Translation):** تبدیل متن به فارسی روان با رعایت ریتم و طول زمانی گفتار اصلی.
 - **🗣️ شبیه‌سازی هویت صدای گوینده (Zero-shot Voice Cloning):** استخراج الگوی آوایی گوینده در چند ثانیه نخست و تولید صدای فارسی با همان جنس و لحن.
-- **👄 هماهنگ‌سازی حرکت لب (Real-time Lip-Sync):** پردازش فریم‌های چهره با مدل‌های هوش مصنوعی (PyTorch GPU Worker) و ترکیب نرم (Seamless Blending) روی تصویر.
+- **👄 هماهنگ‌سازی حرکت لب بلادرنگ (Simli WebRTC Lip-Sync):** هماهنگ‌سازی دهان و چهره با تاخیر فوق‌العاده پایین (زیر ۳۰۰ میلی‌ثانیه) بر بستر WebRTC بدون نیاز به سرور محلی سنگین کارت گرافیک.
 - **🖥️ رابط کاربری مدرن فلاتر دسکتاپ:** تم تاریک شیشه‌ای، پنل زیرنویس شناور (Overlay)، اسلایدر میکس صدای اصلی/دوبله و پایش لحظه‌ای تاخیر (Latency Monitor).
 
 ---
@@ -40,9 +40,9 @@
     [Flutter Desktop Client] ──(WSS / WebRTC)──▶ [Node.js Orchestrator]
                ▲                                         │
                │ (Sync Audio/Subtitles/Video)            ├─▶ [Streaming STT]
-               │                                         ├─▶ [LLM Translator]
+               │                                         ├─▶ [Gemini Flash Translator]
                │                                         ├─▶ [Voice Cloning TTS]
-               └─────────────────────────────────────────┴─▶ [GPU Lip-Sync Worker]
+               └─────────────────────────────────────────┴─▶ [Cloud Lip-Sync (Simli)]
 ```
 
 ---
@@ -71,8 +71,7 @@ live-transalte/
 │       ├── lib/               # منطق رابط کاربری، مدیریت نشست و پخش
 │       └── windows/runner/    # پلاگین بومی C++ برای ضبط WASAPI
 ├── services/
-│   ├── orchestrator/          # سرور هماهنگ‌کننده نشست‌ها (Node.js + TypeScript)
-│   └── lipsync-worker/        # ورکر پردازش تصویر و لب‌خوانی (Python + PyTorch)
+│   └── orchestrator/          # سرور هماهنگ‌کننده نشست‌ها و ارائه‌دهندگان ابری (Node.js + TS)
 ├── docs/                      # مستندات کامل مهندسی و معماری
 ├── LICENSE                    # پروانه انتشار نرم‌افزار (MIT)
 └── README.md                  # راهنمای اصلی پروژه
@@ -83,10 +82,10 @@ live-transalte/
 ## 🚦 نقشه راه فازبندی (Roadmap)
 
 - [x] **گام اول:** تدوین مشخصات محصول، طراحی پایپ‌لاین بلادرنگ و انتخاب پلتفرم مبنا (Windows Flutter).
-- [ ] **گام دوم:** پیاده‌سازی افزونه C++ ضبط صدای WASAPI در فلاتر و ایجاد اسکلت اپلیکیشن دسکتاپ.
-- [ ] **گام سوم:** توسعه سرور هماهنگ‌کننده (Orchestrator) با وب‌سوکت، اتصال به STT و ترجمه بلادرنگ.
-- [ ] **گام چهارم:** پیاده‌سازی پایپ‌لاین شبیه‌سازی صدای فارسی (Voice Cloning TTS) و تنظیم سرعت تطبیقی.
-- [ ] **گام پنجم:** راه‌اندازی ورکر GPU هماهنگ‌سازی لب (Lip-Sync) با قابلیت بازگشت خودکار به حالت فقط-صوت.
+- [x] **گام دوم:** پیاده‌سازی افزونه C++ ضبط صدای WASAPI در فلاتر و ایجاد اسکلت اپلیکیشن دسکتاپ.
+- [x] **گام سوم:** توسعه سرور هماهنگ‌کننده (Orchestrator) با وب‌سوکت، اتصال به Deepgram STT و Gemini Flash ترجمه.
+- [x] **گام چهارم:** پیاده‌سازی پایپ‌لاین شبیه‌سازی صدای فارسی (ElevenLabs Voice Cloning) و تنظیم سرعت تطبیقی SOLA DSP.
+- [x] **گام پنجم:** راه‌اندازی ماژول هماهنگ‌سازی حرکت لب (Simli WebRTC Lip-Sync) با قابلیت بازگشت خودکار به حالت فقط-صوت.
 - [ ] **گام ششم:** گسترش کلاینت فلاتر به پلتفرم‌های اندروید و مک‌اواس در فازهای بعدی.
 
 ---
