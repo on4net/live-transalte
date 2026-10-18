@@ -3,6 +3,7 @@ import 'dart:ffi' as ffi;
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:ffi/ffi.dart';
+import 'audio_capture_provider.dart';
 
 typedef NativeAudioCallback = ffi.Void Function(ffi.Pointer<ffi.Uint8> data, ffi.Int32 length);
 typedef DartAudioCallback = void Function(ffi.Pointer<ffi.Uint8> data, int length);
@@ -16,7 +17,7 @@ typedef DartStopCapture = void Function();
 typedef NativeIsCapturing = ffi.Bool Function();
 typedef DartIsCapturing = bool Function();
 
-class WasapiBindings {
+class WasapiBindings implements AudioCaptureProvider {
   static final WasapiBindings _instance = WasapiBindings._internal();
   factory WasapiBindings() => _instance;
 
@@ -63,7 +64,8 @@ class WasapiBindings {
     }
   }
 
-  bool startCapture() {
+  @override
+  bool startCapture({int sampleRate = 16000, int channels = 1}) {
     if (!_initialized) initialize();
 
     if (_mockMode) {

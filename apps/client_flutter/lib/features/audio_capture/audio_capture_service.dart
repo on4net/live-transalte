@@ -1,10 +1,10 @@
 import 'dart:async';
 import 'dart:typed_data';
-import '../../native/wasapi_bindings.dart';
+import '../../native/audio_capture_provider.dart';
 import '../session/session_controller.dart';
 
 class AudioCaptureService {
-  final WasapiBindings _wasapi = WasapiBindings();
+  final AudioCaptureProvider _provider = AudioCaptureProvider.create();
   StreamSubscription<Uint8List>? _audioSubscription;
   bool _isStreaming = false;
   bool get isStreaming => _isStreaming;
@@ -12,8 +12,8 @@ class AudioCaptureService {
   void startCapture(SessionController sessionController) {
     if (_isStreaming) return;
 
-    _wasapi.startCapture();
-    _audioSubscription = _wasapi.audioStream.listen((pcmChunk) {
+    _provider.startCapture();
+    _audioSubscription = _provider.audioStream.listen((pcmChunk) {
       if (sessionController.status == SessionStatus.connected) {
         sessionController.sendAudioChunk(pcmChunk);
       }
@@ -27,12 +27,12 @@ class AudioCaptureService {
 
     _audioSubscription?.cancel();
     _audioSubscription = null;
-    _wasapi.stopCapture();
+    _provider.stopCapture();
     _isStreaming = false;
   }
 
   void dispose() {
     stopCapture();
-    _wasapi.dispose();
+    _provider.dispose();
   }
 }

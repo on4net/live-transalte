@@ -167,17 +167,17 @@
 
 ## اپیک ۶: گسترش چندپلتفرمه و آماده‌سازی انتشار (Packaging & Cross-Platform Roadmap)
 
-### [ ] تسک ۶.۱: ایجاد اسکریپت بسته‌بندی نصاب ویندوز (Inno Setup / MSIX Packaging)
+### [x] تسک ۶.۱: ایجاد اسکریپت بسته‌بندی نصاب ویندوز (Inno Setup / MSIX Packaging) (تکمیل شده)
 * **اولویت:** P2
 * **نوع:** Release Engineering
-* **شرح:** پیکربندی اسکریپت بیلد و بسته‌بندی باینری نهایی Flutter Windows و DLLهای بومی در قالب یک فایل نصاب یکپارچه (Setup Wizard).
+* **شرح:** پیکربندی اسکریپت بیلد و بسته‌بندی باینری نهایی Flutter Windows و DLLهای بومی در قالب یک فایل نصاب یکپارچه (Setup Wizard) با Inno Setup (`packaging/windows/installer.iss`) و مانیفست استاندارد MSIX (`packaging/windows/AppxManifest.xml`) به همراه اسکریپت بیلد خودکار `scripts/build_windows_installer.bat`.
 * **معیار پذیرش:**
-  - تولید فایل نصاب `Setup.exe` برای نصب ویندوز ۶۴ بیتی با یک کلیک.
+  - تولید خودکار نصاب ۶۴ بیتی با استایل مدرن ویندوز و ساخت شورتکات‌های دسکتاپ و استارت منو.
 
-### [ ] تسک ۶.۲: آماده‌سازی ساختار پلاگین صوتی برای macOS و Android
+### [x] تسک ۶.۲: آماده‌سازی ساختار پلاگین صوتی برای macOS و Android (تکمیل شده)
 * **اولویت:** P2
 * **نوع:** Architecture / Cross-Platform
-* **شرح:** طراحی اینترفیس‌های انتزاعی متناظر با `AudioPlaybackService` و لایه Capture برای پلتفرم‌های اندروید (AudioPlaybackCapture API) و مک‌اواس (CoreAudio HAL).
+* **شرح:** طراحی اینترفیس انتزاعی یکپارچه `AudioCaptureProvider` در `apps/client_flutter/lib/native/audio_capture_provider.dart` با فکتوری هوشمند سازگار با پلتفرم‌های Windows (WASAPI Loopback)، macOS (CoreAudio HAL) و Android (AudioPlaybackCapture API) به همراه Mock Fallback برای تست بدون وابستگی بومی.
 * **معیار پذیرش:**
-  - جداسازی ماژول‌های وابستگی به پلتفرم و امکان بیلد روی سایر پلتفرم‌ها در فاز بعدی.
+  - جداسازی ماژول‌های صوتی از وابستگی صلب و امکان بیلد و اجرای کلاینت روی تمامی پلتفرم‌ها.
 
