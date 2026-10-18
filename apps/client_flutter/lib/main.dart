@@ -6,6 +6,7 @@ import 'features/diagnostics/latency_monitor_widget.dart';
 import 'features/translation/subtitle_overlay.dart';
 
 import 'features/player/audio_playback_service.dart';
+import 'features/lipsync/lipsync_avatar_widget.dart';
 import 'native/window_capture_bindings.dart';
 
 void main() {
@@ -52,6 +53,8 @@ class _DashboardBodyState extends State<_DashboardBody> {
   late final WindowCaptureBindings _windowCapture;
 
   CapturableWindow? _selectedWindow;
+  bool _isSpeaking = false;
+  Timer? _speakingResetTimer;
 
   @override
   void initState() {
@@ -62,9 +65,16 @@ class _DashboardBodyState extends State<_DashboardBody> {
     _windowCapture = WindowCaptureBindings();
     _windowCapture.initialize();
 
-    // Wire synthesized audio chunks into playback jitter buffer
+    // Wire synthesized audio chunks into playback jitter buffer & LipSync speaking animation
     _sessionController.onSynthesizedAudioReceived = (pcmBytes, durationMs, pts) {
       _playbackService.enqueueChunk(pcmBytes, durationMs, pts);
+      if (mounted) {
+        setState(() => _isSpeaking = true);
+        _speakingResetTimer?.cancel();
+        _speakingResetTimer = Timer(Duration(milliseconds: durationMs > 0 ? durationMs : 400), () {
+          if (mounted) setState(() => _isSpeaking = false);
+        });
+      }
     };
 
     _sessionController.addListener(() {
@@ -77,6 +87,7 @@ class _DashboardBodyState extends State<_DashboardBody> {
         _audioService.stopCapture();
         _playbackService.stop();
         _windowCapture.stopCapture();
+        _isSpeaking = false;
       }
       setState(() {});
     });
@@ -84,6 +95,7 @@ class _DashboardBodyState extends State<_DashboardBody> {
 
   @override
   void dispose() {
+    _speakingResetTimer?.cancel();
     _windowCapture.dispose();
     _playbackService.dispose();
     _audioService.dispose();
@@ -511,51 +523,74 @@ class _DashboardBodyState extends State<_DashboardBody> {
 
                         const SizedBox(width: 20),
 
-                        // Right Action Card
+                        // Right Column: Lip-Sync Avatar & Action Controls
                         Expanded(
                           flex: 2,
-                          child: Container(
-                            padding: const EdgeInsets.all(24),
-                            decoration: AppTheme.glassCardDecoration(),
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                Icon(
-                                  isConnected ? Icons.hearing : Icons.mic_none,
-                                  size: 64,
-                                  color: isConnected ? AppTheme.accentGreen : AppTheme.primaryNeon,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              // Interactive Lip-Sync Avatar Viewport
+                              Expanded(
+                                child: LipSyncAvatarWidget(
+                                  isConnected: isConnected,
+                                  isSpeaking: _isSpeaking,
+                                  latencyMs: _sessionController.latencyMs,
                                 ),
-                                const SizedBox(height: 16),
-                                Text(
-                                  isConnected ? 'در حال دریافت صدای سیستم...' : 'آماده شروع نشست',
-                                  textAlign: TextAlign.center,
-                                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                              ),
+                              const SizedBox(height: 16),
+
+                              // Start / Stop Action Controls Card
+                              Container(
+                                padding: const EdgeInsets.all(20),
+                                decoration: AppTheme.glassCardDecoration(),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Icon(
+                                          isConnected ? Icons.hearing : Icons.mic_none,
+                                          size: 24,
+                                          color: isConnected ? AppTheme.accentGreen : AppTheme.primaryNeon,
+                                        ),
+                                        const SizedBox(width: 10),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                isConnected ? 'نشست دوبله زنده فعال است' : 'آماده شروع مترجم زنده',
+                                                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                                              ),
+                                              Text(
+                                                isConnected
+                                                    ? 'دریافت با WASAPI و لیپ‌سینک با Simli'
+                                                    : 'برای شروع ترجمه زنده روی دکمه زیر کلیک کنید',
+                                                style: const TextStyle(fontSize: 11, color: AppTheme.textMuted),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 16),
+                                    ElevatedButton.icon(
+                                      onPressed: isConnecting ? null : _handleToggleSession,
+                                      icon: Icon(isConnected ? Icons.stop : Icons.play_arrow),
+                                      label: Text(
+                                        isConnected
+                                            ? 'توقف دوبله زنده'
+                                            : (isConnecting ? 'در حال برقراری ارتباط...' : 'شروع مترجم زنده'),
+                                      ),
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: isConnected ? AppTheme.accentRed : AppTheme.primaryNeon,
+                                        foregroundColor: isConnected ? Colors.white : Colors.black,
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  isConnected
-                                      ? 'تمام صداهای خروجی ویندوز (یوتیوب، جلسات و مدیا) با WASAPI ضبط و دوبله می‌شوند.'
-                                      : 'برای شروع ترجمه زنده روی دکمه زیر کلیک کنید.',
-                                  textAlign: TextAlign.center,
-                                  style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary),
-                                ),
-                                const SizedBox(height: 32),
-                                ElevatedButton.icon(
-                                  onPressed: isConnecting ? null : _handleToggleSession,
-                                  icon: Icon(isConnected ? Icons.stop : Icons.play_arrow),
-                                  label: Text(
-                                    isConnected
-                                        ? 'توقف دوبله زنده'
-                                        : (isConnecting ? 'در حال برقراری ارتباط...' : 'شروع مترجم زنده'),
-                                  ),
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: isConnected ? AppTheme.accentRed : AppTheme.primaryNeon,
-                                    foregroundColor: isConnected ? Colors.white : Colors.black,
-                                  ),
-                                ),
-                              ],
-                            ),
+                              ),
+                            ],
                           ),
                         ),
                       ],
