@@ -5,6 +5,7 @@ import { createProviderBundle } from './providers/index.js';
 import { SessionConfig } from './types/session.js';
 import { AudioChunkAssembler } from './audio/chunk-assembler.js';
 import { AudioTimeStretcher } from './audio/time-stretcher.js';
+import { getDashboardHtml } from './web/dashboard.js';
 
 dotenv.config();
 
@@ -18,6 +19,18 @@ server.register(fastifyWebsocket);
 
 const providers = createProviderBundle();
 const timeStretcher = new AudioTimeStretcher();
+
+// Web Dashboard & Live Monitor endpoint
+server.get('/', async (req, reply) => {
+  reply.type('text/html').send(
+    getDashboardHtml({
+      stt: providers.stt.name,
+      translation: providers.translation.name,
+      tts: providers.tts.name,
+      lipSync: providers.lipSync.name,
+    })
+  );
+});
 
 // Health check endpoint
 server.get('/health', async () => {
